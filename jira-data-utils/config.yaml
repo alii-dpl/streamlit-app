@@ -1,0 +1,38 @@
+# Connection settings are loaded from .streamlit/secrets.toml
+# Do NOT put credentials in this file!
+
+JQL: 
+    Query: Sprint = "iApts 2025-26"
+    #Query: key=DEV-197
+    #Query: project in ("DEV1", "DEV2")
+
+OutPutFileName: iapts-sprint-only-26.csv
+
+# Map field names to additional attributes to extract
+Attributes:
+      Stage: status.name      
+      StatusCategory: status.statusCategory.name        
+      Level: priority.name
+      Labels: labels
+      Components: components.name
+      Version: fixVersions.last.name
+      VersionRelease: fixVersions.last.releaseDate
+      ParentId: parent.key
+      ParentName: parent.fields.summary
+      ParentType: parent.fields.issuetype.name
+      AssigneeName: assignee.displayName
+      LinksToOutwardKey: issuelinks.first.outwardIssue.key
+      LinksToInwardKey: issuelinks.first.inwardIssue.key     
+      Timeoriginalestimate: timeoriginalestimate
+      Timeestimate: timeestimate
+      Timespent: timespent
+      AggreagateTimeoriginalestimate: aggregatetimeoriginalestimate
+      AggreagateTimeestimate: aggregatetimeestimate
+      AggreagateTimespent: aggregatetimespent
+      Workratio: workratio
+      StoryPoints: customfield_10024
+      QAStoryPoints: customfield_10158
+      #Environment: customfield_10081.last.value
+      #HierarchyProductItemName: customfield_18701.fields.summary
+      #HierarchyProductItemKey: customfield_18701.key
+      #HierarchyEpicType: customfield_21401.value

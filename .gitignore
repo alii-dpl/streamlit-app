@@ -1,0 +1,27 @@
+# Streamlit secrets (contains API keys and credentials)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Output files
+*.csv
+results/
+
+# OS
+.DS_Store
+Thumbs.db
+
