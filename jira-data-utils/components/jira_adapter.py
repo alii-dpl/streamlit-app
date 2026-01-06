@@ -22,7 +22,6 @@ def configure_headers(auth: Auth) -> Dict[str, str]:
         auth_string = f"{auth.username}:{auth.password}"
         encoded = base64.b64encode(auth_string.encode()).decode()
         headers['Authorization'] = f"Basic {encoded}"
-        print(f"Using Basic Auth with username: {auth.username}")
     
     return headers
 
