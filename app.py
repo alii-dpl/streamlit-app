@@ -63,6 +63,34 @@ from metrics import (
     format_time_seconds,
 )
 
+# Import DORA metrics
+from dora import (
+    count_deployments,
+    get_deployments,
+    calculate_deployment_frequency,
+    deployment_frequency_by_type,
+    deployment_frequency_by_date,
+    get_deployment_frequency_rating,
+    calculate_lead_time_for_changes,
+    lead_time_for_changes_stats,
+    lead_time_for_changes_by_type,
+    get_lead_time_for_changes_rating,
+    calculate_change_failure_rate,
+    change_failure_rate_by_type,
+    get_tickets_with_failures,
+    get_change_failure_rate_rating,
+    calculate_mttr,
+    mttr_stats,
+    mttr_by_type,
+    mttr_by_priority,
+    get_tickets_with_mttr,
+    get_mttr_rating,
+    calculate_dora_summary,
+    get_overall_dora_rating,
+    format_hours_human,
+    DORA_BENCHMARKS,
+)
+
 st.set_page_config(page_title="Sprint Story Points", page_icon="📊", layout="wide")
 
 st.title("📊 Sprint Story Points Tracker")
@@ -311,6 +339,7 @@ def main():
         st.caption("Toggle to show/hide sections")
         
         show_story_points = st.toggle("🎯 Story Points", value=True, key="show_story_points")
+        show_dora = st.toggle("🚀 DORA Metrics [Beta]", value=True, key="show_dora")
         show_stage_time = st.toggle("📊 Stage Time Analysis", value=True, key="show_stage_time")
         show_cycle_time = st.toggle("⏱️ Cycle Time", value=True, key="show_cycle_time")
         show_lead_time = st.toggle("📏 Lead Time", value=True, key="show_lead_time")
@@ -461,6 +490,379 @@ def main():
         if len(df_completed) > 0:
             with st.expander(f"✅ Click to view {len(df_completed)} completed tickets ({completed_sp:.1f} SP)"):
                 display_tickets_table(df_completed, ['ID', 'Link', 'Name', 'Type', 'StoryPoints', 'Stage', 'AssigneeName'])
+        
+        st.divider()
+    
+    # =========================================================================
+    # DORA METRICS
+    # =========================================================================
+    if show_dora:
+        st.header("🚀 DORA Metrics")
+        st.caption("DevOps Research and Assessment - Software Delivery Performance")
+        
+        # Show DORA explanation
+        with st.expander("ℹ️ What are DORA Metrics?"):
+            st.markdown("""
+            **DORA (DevOps Research and Assessment)** metrics are the gold standard for measuring software delivery performance:
+            
+            | Metric | What it measures | Formula |
+            |--------|------------------|---------|
+            | **Deployment Frequency** | How often you deploy to production | Count of tickets reaching "On Production" |
+            | **Lead Time for Changes** | Time from commit to production | `On_Production_start - In_Progress_start` |
+            | **Change Failure Rate** | % of deployments causing rework | `(QA_recurrence + UAT_recurrence) / Deployments` |
+            | **Mean Time to Restore** | How fast you fix production issues | `Resolved_start - On_Production_start` |
+            
+            Higher deployment frequency and lower lead times indicate elite performance.
+            """)
+        
+        # Calculate DORA summary
+        dora_summary = calculate_dora_summary(df_active, sprint_duration_days=14)
+        overall_rating, overall_color = get_overall_dora_rating(dora_summary)
+        
+        # Overall DORA Score
+        st.markdown(
+            f"""
+            <div style="
+                background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+                border-left: 4px solid {overall_color};
+                padding: 16px 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            ">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <span style="font-size: 1.2em; color: #e2e8f0;">Overall DORA Performance</span>
+                    </div>
+                    <div style="
+                        background: {overall_color};
+                        color: white;
+                        padding: 8px 20px;
+                        border-radius: 25px;
+                        font-weight: bold;
+                        font-size: 1.1em;
+                    ">{overall_rating}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # ----- 1. DEPLOYMENT FREQUENCY -----
+        st.subheader("📦 Deployment Frequency")
+        
+        df_stats = dora_summary['deployment_frequency']['stats']
+        df_rating = dora_summary['deployment_frequency']['rating']
+        df_color = dora_summary['deployment_frequency']['color']
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "🚀 Deployments",
+                f"{df_stats['total_deployments']}",
+                help="Total tickets deployed to production"
+            )
+            st.markdown(
+                f"<span style='background:{df_color};color:white;padding:4px 12px;border-radius:20px;font-weight:bold;font-size:0.8em'>{df_rating}</span>",
+                unsafe_allow_html=True
+            )
+        
+        with col2:
+            st.metric(
+                "📅 Per Week",
+                f"{df_stats['deployments_per_week']:.1f}",
+                help="Average deployments per week"
+            )
+        
+        with col3:
+            st.metric(
+                "📊 Per Day",
+                f"{df_stats['deployments_per_day']:.2f}",
+                help="Average deployments per day"
+            )
+        
+        with col4:
+            st.metric(
+                "📈 Deploy Rate",
+                f"{df_stats['deployment_percentage']:.1f}%",
+                help="Percentage of tickets that reached production"
+            )
+        
+        # Deployment frequency by type
+        df_by_type = deployment_frequency_by_type(df_active)
+        if len(df_by_type) > 0:
+            with st.expander("📊 Deployment Frequency by Type"):
+                st.dataframe(
+                    df_by_type,
+                    column_config={
+                        "Type": st.column_config.TextColumn("Type"),
+                        "Total Tickets": st.column_config.NumberColumn("Total"),
+                        "Deployed": st.column_config.NumberColumn("Deployed"),
+                        "Deployment Rate": st.column_config.NumberColumn("Rate %"),
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+        
+        # Show deployed tickets
+        deployed_tickets = get_deployments(df_active)
+        if len(deployed_tickets) > 0:
+            with st.expander(f"✅ View {len(deployed_tickets)} Deployed Tickets"):
+                display_tickets_table(deployed_tickets, ['ID', 'Link', 'Name', 'Type', 'StoryPoints', 'AssigneeName'])
+        
+        st.divider()
+        
+        # ----- 2. LEAD TIME FOR CHANGES -----
+        st.subheader("⏱️ Lead Time for Changes")
+        st.caption("Time from development start to production deployment")
+        
+        ltc_stats = dora_summary['lead_time_for_changes']['stats']
+        ltc_rating = dora_summary['lead_time_for_changes']['rating']
+        ltc_color = dora_summary['lead_time_for_changes']['color']
+        
+        if ltc_stats['count'] > 0:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "📏 Median",
+                    f"{ltc_stats['median']:.1f} days",
+                    help="Median time from In Progress to On Production"
+                )
+                st.markdown(
+                    f"<span style='background:{ltc_color};color:white;padding:4px 12px;border-radius:20px;font-weight:bold;font-size:0.8em'>{ltc_rating}</span>",
+                    unsafe_allow_html=True
+                )
+            
+            with col2:
+                st.metric(
+                    "📈 Average",
+                    f"{ltc_stats['mean']:.1f} days",
+                    help="Average lead time for changes"
+                )
+            
+            with col3:
+                st.metric(
+                    "🔺 P90",
+                    f"{ltc_stats['p90']:.1f} days",
+                    help="90th percentile lead time"
+                )
+            
+            with col4:
+                st.metric(
+                    "📋 Measured",
+                    f"{ltc_stats['count']}",
+                    help="Tickets with lead time data"
+                )
+            
+            # Lead time by type
+            ltc_by_type = lead_time_for_changes_by_type(df_active)
+            if len(ltc_by_type) > 0:
+                with st.expander("📊 Lead Time by Type"):
+                    st.dataframe(
+                        ltc_by_type,
+                        column_config={
+                            "Type": st.column_config.TextColumn("Type"),
+                            "Count": st.column_config.NumberColumn("Count"),
+                            "Median": st.column_config.NumberColumn("Median (days)"),
+                            "Mean": st.column_config.NumberColumn("Mean (days)"),
+                            "P90": st.column_config.NumberColumn("P90 (days)"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+        else:
+            st.info("ℹ️ No lead time data available. Tickets need 'In Progress' and 'On Production' stage dates.")
+        
+        st.divider()
+        
+        # ----- 3. CHANGE FAILURE RATE -----
+        st.subheader("⚠️ Change Failure Rate")
+        st.caption("Percentage of deployments causing rework (QA/UAT recurrence)")
+        
+        cfr_stats = dora_summary['change_failure_rate']['stats']
+        cfr_rating = dora_summary['change_failure_rate']['rating']
+        cfr_color = dora_summary['change_failure_rate']['color']
+        
+        if cfr_stats['total_deployments'] > 0:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "📉 CFR",
+                    f"{cfr_stats['change_failure_rate']:.1f}%",
+                    help="Change Failure Rate = (QA + UAT recurrence) / Deployments"
+                )
+                st.markdown(
+                    f"<span style='background:{cfr_color};color:white;padding:4px 12px;border-radius:20px;font-weight:bold;font-size:0.8em'>{cfr_rating}</span>",
+                    unsafe_allow_html=True
+                )
+            
+            with col2:
+                st.metric(
+                    "🔄 Failure Signals",
+                    f"{cfr_stats['total_failure_signals']}",
+                    help="Total QA + UAT recurrence count"
+                )
+            
+            with col3:
+                st.metric(
+                    "🧪 QA Bounces",
+                    f"{cfr_stats['qa_recurrence_total']}",
+                    help="Total QA stage recurrence"
+                )
+            
+            with col4:
+                st.metric(
+                    "✅ UAT Bounces",
+                    f"{cfr_stats['uat_recurrence_total']}",
+                    help="Total UAT stage recurrence"
+                )
+            
+            # CFR by type
+            cfr_by_type = change_failure_rate_by_type(df_active)
+            if len(cfr_by_type) > 0:
+                with st.expander("📊 Change Failure Rate by Type"):
+                    st.dataframe(
+                        cfr_by_type,
+                        column_config={
+                            "Type": st.column_config.TextColumn("Type"),
+                            "Deployments": st.column_config.NumberColumn("Deployments"),
+                            "Failure Signals": st.column_config.NumberColumn("Failures"),
+                            "CFR (%)": st.column_config.NumberColumn("CFR %"),
+                            "Tickets w/ Failures": st.column_config.NumberColumn("Affected"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+            
+            # Show tickets with failures
+            failed_tickets = get_tickets_with_failures(df_active)
+            if len(failed_tickets) > 0:
+                with st.expander(f"⚠️ View {len(failed_tickets)} Tickets with Failures"):
+                    fail_cols = ['ID', 'Link', 'Name', 'Type', 'Failure_Signals']
+                    available_cols = [c for c in fail_cols if c in failed_tickets.columns]
+                    st.dataframe(
+                        failed_tickets[available_cols].head(20),
+                        column_config={
+                            "Link": st.column_config.LinkColumn("Link", display_text="Open"),
+                            "Failure_Signals": st.column_config.NumberColumn("Failures"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+        else:
+            st.info("ℹ️ No deployment data available for CFR calculation.")
+        
+        st.divider()
+        
+        # ----- 4. MEAN TIME TO RESTORE -----
+        st.subheader("🔧 Mean Time to Restore (MTTR)")
+        st.caption("Time from production deployment to resolution")
+        
+        mttr_data = dora_summary['mttr']['stats']
+        mttr_rating = dora_summary['mttr']['rating']
+        mttr_color = dora_summary['mttr']['color']
+        
+        if mttr_data['count'] > 0:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "⏱️ Median MTTR",
+                    format_hours_human(mttr_data['median_hours']),
+                    help="Median time from On Production to Resolved"
+                )
+                st.markdown(
+                    f"<span style='background:{mttr_color};color:white;padding:4px 12px;border-radius:20px;font-weight:bold;font-size:0.8em'>{mttr_rating}</span>",
+                    unsafe_allow_html=True
+                )
+            
+            with col2:
+                st.metric(
+                    "📈 Average",
+                    format_hours_human(mttr_data['mean_hours']),
+                    help="Average MTTR"
+                )
+            
+            with col3:
+                st.metric(
+                    "🔺 P90",
+                    format_hours_human(mttr_data['p90_hours']),
+                    help="90th percentile MTTR"
+                )
+            
+            with col4:
+                st.metric(
+                    "📋 Measured",
+                    f"{mttr_data['count']}",
+                    help="Tickets with MTTR data"
+                )
+            
+            # MTTR by type
+            mttr_type = mttr_by_type(df_active)
+            if len(mttr_type) > 0:
+                with st.expander("📊 MTTR by Type"):
+                    st.dataframe(
+                        mttr_type,
+                        column_config={
+                            "Type": st.column_config.TextColumn("Type"),
+                            "Count": st.column_config.NumberColumn("Count"),
+                            "Median (hours)": st.column_config.NumberColumn("Median (h)"),
+                            "Mean (hours)": st.column_config.NumberColumn("Mean (h)"),
+                            "Median (days)": st.column_config.NumberColumn("Median (d)"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+            
+            # MTTR by priority
+            mttr_prio = mttr_by_priority(df_active)
+            if len(mttr_prio) > 0:
+                with st.expander("📊 MTTR by Priority"):
+                    st.dataframe(
+                        mttr_prio,
+                        column_config={
+                            "Priority": st.column_config.TextColumn("Priority"),
+                            "Count": st.column_config.NumberColumn("Count"),
+                            "Median (hours)": st.column_config.NumberColumn("Median (h)"),
+                            "Mean (hours)": st.column_config.NumberColumn("Mean (h)"),
+                            "P90 (hours)": st.column_config.NumberColumn("P90 (h)"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+            
+            # Show MTTR tickets
+            mttr_tickets = get_tickets_with_mttr(df_active)
+            if len(mttr_tickets) > 0:
+                with st.expander(f"🔧 View {len(mttr_tickets)} Tickets with MTTR Data"):
+                    mttr_cols = ['ID', 'Link', 'Name', 'Type', 'MTTR_Hours']
+                    available_cols = [c for c in mttr_cols if c in mttr_tickets.columns]
+                    display_df = mttr_tickets[available_cols].head(20).copy()
+                    display_df['MTTR_Display'] = display_df['MTTR_Hours'].apply(format_hours_human)
+                    st.dataframe(
+                        display_df.drop(columns=['MTTR_Hours'], errors='ignore'),
+                        column_config={
+                            "Link": st.column_config.LinkColumn("Link", display_text="Open"),
+                            "MTTR_Display": st.column_config.TextColumn("MTTR"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+        else:
+            st.info("ℹ️ No MTTR data available. Tickets need 'On Production' and 'Resolved' stage dates.")
+        
+        # DORA Benchmarks reference
+        with st.expander("📋 DORA Benchmarks Reference"):
+            st.markdown("""
+            | Metric | Elite | High | Medium | Low |
+            |--------|-------|------|--------|-----|
+            | **Deployment Frequency** | On-demand / daily | Weekly | Monthly | Quarterly |
+            | **Lead Time for Changes** | < 1 day | 1-7 days | 1-4 weeks | > 1 month |
+            | **Change Failure Rate** | 0-15% | — | 16-30% | > 30% |
+            | **MTTR** | < 1 hour | < 1 day | 1-7 days | > 1 week |
+            """)
         
         st.divider()
     
@@ -1019,102 +1421,104 @@ def main():
             st.info("ℹ️ No recurrence data available.")
         
         # ----- Defect Escape Rate Sub-section -----
-        st.subheader("🚨 Defect Escape Rate")
-        st.caption("Defects that passed QA but were caught in UAT/Production")
+        # st.subheader("🚨 Defect Escape Rate")
+        # st.caption("Defects that passed QA but were caught in UAT/Production")
+        # 
+        # # Get stats
+        # esc_stats = defect_escape_stats(df_active)
+        # 
+        # if esc_stats['tickets_reached_uat'] > 0:
+        #     # Get rating
+        #     esc_rating, esc_rating_color = get_escape_rate_rating(esc_stats['escape_rate'])
+        #     
+        #     # Display metrics
+        #     col1, col2, col3, col4 = st.columns(4)
+        #     
+        #     with col1:
+        #         st.metric(
+        #             "🚨 Escape Rate",
+        #             f"{esc_stats['escape_rate']:.1f}%",
+        #             help="Percentage of UAT+ tickets that escaped QA and were sent back"
+        #         )
+        #         st.markdown(
+        #             f"<span style='background:{esc_rating_color};color:white;padding:4px 12px;border-radius:20px;font-weight:bold;font-size:0.8em'>{esc_rating}</span>",
+        #             unsafe_allow_html=True
+        #         )
+        #     
+        #     with col2:
+        #         st.metric(
+        #             "🎯 Tickets Reached UAT+",
+        #             f"{esc_stats['tickets_reached_uat']}",
+        #             help="Tickets that reached UAT, Done, or Production stages"
+        #         )
+        #     
+        #     with col3:
+        #         st.metric(
+        #             "🔙 Escaped Defects",
+        #             f"{esc_stats['escaped_defects']}",
+        #             help="Tickets that reached UAT+ then were sent back"
+        #         )
+        #     
+        #     with col4:
+        #         st.metric(
+        #             "📊 Overall Rate",
+        #             f"{esc_stats['overall_rate']:.1f}%",
+        #             help="Escape rate across all tickets (not just UAT+)"
+        #         )
+        #     
+        #     # Escape breakdown (where defects were caught)
+        #     esc_breakdown = defect_escape_breakdown(df_active)
+        #     if len(esc_breakdown) > 0:
+        #         with st.expander("📊 Where Escaped Defects Were Caught"):
+        #             st.caption("Which stage caught the defects after they escaped QA?")
+        #             st.dataframe(
+        #                 esc_breakdown,
+        #                 column_config={
+        #                     "Caught At": st.column_config.TextColumn("Caught At"),
+        #                     "Tickets": st.column_config.NumberColumn("Tickets"),
+        #                     "Percentage": st.column_config.NumberColumn("% of Escapes"),
+        #                 },
+        #                 hide_index=True,
+        #                 use_container_width=True
+        #             )
+        #     
+        #     # Escape by type
+        #     esc_by_type = defect_escape_by_type(df_active)
+        #     if len(esc_by_type) > 0:
+        #         with st.expander("📊 Defect Escape by Ticket Type"):
+        #             st.dataframe(
+        #                 esc_by_type,
+        #                 column_config={
+        #                     "Type": st.column_config.TextColumn("Type"),
+        #                     "Total Tickets": st.column_config.NumberColumn("Total"),
+        #                     "Escaped": st.column_config.NumberColumn("Escaped"),
+        #                     "Escape Rate": st.column_config.NumberColumn("Escape Rate %"),
+        #                 },
+        #                 hide_index=True,
+        #                 use_container_width=True
+        #             )
+        #     
+        #     # Show escaped defect tickets
+        #     escaped_tickets = identify_escaped_defects(df_active)
+        #     if len(escaped_tickets) > 0:
+        #         with st.expander(f"🚨 Escaped Defect Tickets ({len(escaped_tickets)} tickets)"):
+        #             esc_cols = ['ID', 'Link', 'Name', 'Type', 'Rejected_After_UAT', 'QA_Retest', 'Rework']
+        #             available_cols = [c for c in esc_cols if c in escaped_tickets.columns]
+        #             st.dataframe(
+        #                 escaped_tickets[available_cols].head(20),
+        #                 column_config={
+        #                     "Link": st.column_config.LinkColumn("Link", display_text="Open"),
+        #                     "Rejected_After_UAT": st.column_config.NumberColumn("Rejected"),
+        #                     "QA_Retest": st.column_config.NumberColumn("QA Re-test"),
+        #                     "Rework": st.column_config.NumberColumn("Rework"),
+        #                 },
+        #                 hide_index=True,
+        #                 use_container_width=True
+        #             )
+        # else:
+        #     st.info("ℹ️ No defect escape data available. Tickets need UAT/Done stage data.")
         
-        # Get stats
-        esc_stats = defect_escape_stats(df_active)
-        
-        if esc_stats['tickets_reached_uat'] > 0:
-            # Get rating
-            esc_rating, esc_rating_color = get_escape_rate_rating(esc_stats['escape_rate'])
-            
-            # Display metrics
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric(
-                    "🚨 Escape Rate",
-                    f"{esc_stats['escape_rate']:.1f}%",
-                    help="Percentage of UAT+ tickets that escaped QA and were sent back"
-                )
-                st.markdown(
-                    f"<span style='background:{esc_rating_color};color:white;padding:4px 12px;border-radius:20px;font-weight:bold;font-size:0.8em'>{esc_rating}</span>",
-                    unsafe_allow_html=True
-                )
-            
-            with col2:
-                st.metric(
-                    "🎯 Tickets Reached UAT+",
-                    f"{esc_stats['tickets_reached_uat']}",
-                    help="Tickets that reached UAT, Done, or Production stages"
-                )
-            
-            with col3:
-                st.metric(
-                    "🔙 Escaped Defects",
-                    f"{esc_stats['escaped_defects']}",
-                    help="Tickets that reached UAT+ then were sent back"
-                )
-            
-            with col4:
-                st.metric(
-                    "📊 Overall Rate",
-                    f"{esc_stats['overall_rate']:.1f}%",
-                    help="Escape rate across all tickets (not just UAT+)"
-                )
-            
-            # Escape breakdown (where defects were caught)
-            esc_breakdown = defect_escape_breakdown(df_active)
-            if len(esc_breakdown) > 0:
-                with st.expander("📊 Where Escaped Defects Were Caught"):
-                    st.caption("Which stage caught the defects after they escaped QA?")
-                    st.dataframe(
-                        esc_breakdown,
-                        column_config={
-                            "Caught At": st.column_config.TextColumn("Caught At"),
-                            "Tickets": st.column_config.NumberColumn("Tickets"),
-                            "Percentage": st.column_config.NumberColumn("% of Escapes"),
-                        },
-                        hide_index=True,
-                        use_container_width=True
-                    )
-            
-            # Escape by type
-            esc_by_type = defect_escape_by_type(df_active)
-            if len(esc_by_type) > 0:
-                with st.expander("📊 Defect Escape by Ticket Type"):
-                    st.dataframe(
-                        esc_by_type,
-                        column_config={
-                            "Type": st.column_config.TextColumn("Type"),
-                            "Total Tickets": st.column_config.NumberColumn("Total"),
-                            "Escaped": st.column_config.NumberColumn("Escaped"),
-                            "Escape Rate": st.column_config.NumberColumn("Escape Rate %"),
-                        },
-                        hide_index=True,
-                        use_container_width=True
-                    )
-            
-            # Show escaped defect tickets
-            escaped_tickets = identify_escaped_defects(df_active)
-            if len(escaped_tickets) > 0:
-                with st.expander(f"🚨 Escaped Defect Tickets ({len(escaped_tickets)} tickets)"):
-                    esc_cols = ['ID', 'Link', 'Name', 'Type', 'Rejected_After_UAT', 'QA_Retest', 'Rework']
-                    available_cols = [c for c in esc_cols if c in escaped_tickets.columns]
-                    st.dataframe(
-                        escaped_tickets[available_cols].head(20),
-                        column_config={
-                            "Link": st.column_config.LinkColumn("Link", display_text="Open"),
-                            "Rejected_After_UAT": st.column_config.NumberColumn("Rejected"),
-                            "QA_Retest": st.column_config.NumberColumn("QA Re-test"),
-                            "Rework": st.column_config.NumberColumn("Rework"),
-                        },
-                        hide_index=True,
-                        use_container_width=True
-                    )
-        else:
-            st.info("ℹ️ No defect escape data available. Tickets need UAT/Done stage data.")
+        st.subheader("🚨 Defect Escape Rate Disabled")
         
         st.divider()
     
