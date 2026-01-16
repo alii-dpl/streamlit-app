@@ -2,7 +2,7 @@
 # Do NOT put credentials in this file!
 
 JQL: 
-    Query: Sprint = "iApts 2025-26"
+    Query: Sprint = "iApts 2026-01"  
     #Query: key=DEV-197
     #Query: project in ("DEV1", "DEV2")
 

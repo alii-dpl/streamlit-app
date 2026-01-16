@@ -181,10 +181,10 @@ def fetch_jira_data(sprint_suffix: str) -> pd.DataFrame:
 
 
 def is_completed(stage_value):
-    """Check if ticket is completed based on Stage column (UAT or Done)"""
+    """Check if ticket is completed based on Stage column (UAT, Done, Released, Resolved, Closed, On Production, or Pending Unleash)"""
     if pd.notna(stage_value):
         stage_lower = str(stage_value).strip().lower()
-        return stage_lower in ['uat', 'done']
+        return stage_lower in ['uat', 'done', 'released', 'resolved', 'closed', 'on production', 'pending unleash']
     return False
 
 
@@ -456,7 +456,7 @@ def main():
             st.metric(
                 "✅ Completed", 
                 f"{completed_sp:.1f} SP",
-                help="Story points for tickets in UAT or Done stage"
+                help="Story points for tickets in UAT, Done, Released, Resolved, Closed, On Production, or Pending Unleash stage"
             )
             st.caption(f"{len(df_completed)} tickets")
         
@@ -464,7 +464,7 @@ def main():
             st.metric(
                 "⏳ Remaining", 
                 f"{remaining_sp:.1f} SP",
-                help="Story points for tickets not yet in UAT or Done"
+                help="Story points for tickets not yet in UAT, Done, Released, Resolved, Closed, On Production, or Pending Unleash"
             )
             st.caption(f"{len(df_remaining)} tickets")
         
