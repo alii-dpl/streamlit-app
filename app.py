@@ -481,6 +481,39 @@ def main():
             progress = completed_sp / total_sp
             st.progress(progress, text=f"Sprint Progress: {progress:.1%}")
         
+        # Pie chart showing tickets by Type
+        if 'Type' in df_active.columns and len(df_active) > 0:
+            type_counts = df_active['Type'].value_counts()
+            if len(type_counts) > 0:
+                import plotly.express as px
+                
+                # Create pie chart
+                fig = px.pie(
+                    values=type_counts.values,
+                    names=type_counts.index,
+                    title="Tickets by Type",
+                    hole=0.4,  # Donut chart style
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig.update_traces(
+                    textinfo='percent+label',
+                    textposition='outside',
+                    hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+                )
+                fig.update_layout(
+                    height=400,
+                    showlegend=True,
+                    legend=dict(
+                        orientation="v",
+                        yanchor="middle",
+                        y=0.5,
+                        xanchor="left",
+                        x=1.05
+                    )
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+        
         # Show remaining tickets
         if len(df_remaining) > 0:
             with st.expander(f"⏳ Click to view {len(df_remaining)} remaining tickets ({remaining_sp:.1f} SP)"):
