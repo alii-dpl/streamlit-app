@@ -315,6 +315,40 @@ def main():
         
         st.divider()
         
+        # Story Points filter
+        story_points_filters = {}
+        if 'StoryPoints' in df_raw.columns:
+            # Get unique story point values
+            sp_values_raw = pd.to_numeric(df_raw['StoryPoints'], errors='coerce').dropna()
+            # Convert to int, filter out NaN, and get unique values
+            sp_values_set = set()
+            for sp in sp_values_raw:
+                if pd.notna(sp):
+                    try:
+                        sp_int = int(float(sp))  # Convert via float first to handle edge cases
+                        sp_values_set.add(sp_int)
+                    except (ValueError, OverflowError):
+                        continue
+            
+            sp_values = sorted(list(sp_values_set))
+            
+            if len(sp_values) > 0:
+                st.subheader("Filter by Story Points")
+                st.caption("Toggle ON to include")
+                
+                # Create a toggle for each story point value with unique key
+                # Ensure keys are unique by using a prefix and the value
+                for idx, sp_value in enumerate(sp_values):
+                    # Use index in key to ensure absolute uniqueness even if values somehow duplicate
+                    unique_key = f"story_points_toggle_{idx}_{sp_value}"
+                    story_points_filters[sp_value] = st.toggle(
+                        f"{sp_value} SP", 
+                        value=True, 
+                        key=unique_key
+                    )
+        
+        st.divider()
+        
         # Get unique ticket types
         type_filters = {}
         if 'Type' in df_raw.columns:
@@ -391,6 +425,22 @@ def main():
             type_removed_count = (~type_mask).sum()
             df_active = df_active[type_mask].copy().reset_index(drop=True)
     
+    # Apply Story Points filters
+    sp_removed_count = 0
+    if 'StoryPoints' in df_active.columns and story_points_filters:
+        selected_sp_values = [sp for sp, selected in story_points_filters.items() if selected]
+        excluded_sp_values = [sp for sp, selected in story_points_filters.items() if not selected]
+        
+        # Only apply filter if some story points are excluded AND at least one is selected
+        if excluded_sp_values and selected_sp_values:
+            # Convert StoryPoints to numeric and filter
+            df_active['_sp_numeric'] = pd.to_numeric(df_active['StoryPoints'], errors='coerce')
+            sp_mask = df_active['_sp_numeric'].isin(selected_sp_values)
+            sp_removed_count = (~sp_mask).sum()
+            df_active = df_active[sp_mask].copy().reset_index(drop=True)
+            # Remove temporary column
+            df_active = df_active.drop(columns=['_sp_numeric'], errors='ignore')
+    
     removed_count = len(df_removed)
     
     # =========================================================================
@@ -405,6 +455,11 @@ def main():
         st.metric("Duplicate Removed", duplicate_count, delta=f"-{duplicate_count}" if duplicate_count > 0 else None, delta_color="inverse")
     with col4:
         st.metric("Active Tickets", len(df_active))
+    
+    if sp_removed_count > 0 and story_points_filters:
+        selected_sp = [sp for sp, selected in story_points_filters.items() if selected]
+        if selected_sp:
+            st.info(f"🎯 **{sp_removed_count}** tickets filtered out by Story Points selection (showing: {', '.join(map(str, selected_sp))} SP)")
     
     if type_removed_count > 0:
         st.info(f"📋 **{type_removed_count}** tickets filtered out by Type selection")
